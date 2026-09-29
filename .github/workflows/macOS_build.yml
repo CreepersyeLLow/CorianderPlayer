@@ -1,0 +1,60 @@
+name: Build macOS
+
+on:
+  # 允许在 Actions 页面手动点击触发
+  workflow_dispatch:
+  # 可选：推送到 main 分支时自动触发
+  push:
+    branches: [ main ]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter
+        run: flutter --version
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --version 2.0.0 || cargo install flutter_rust_bridge_codegen
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Generate Rust bindings
+        run: flutter_rust_bridge_codegen generate
+        continue-on-error: true
+
+      - name: Pod install
+        working-directory: macos
+        run: pod install
+
+      - name: Build macOS app
+        run: flutter build macos --release
+
+      - name: Upload macOS build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coriander-player-macos
+          path: build/macos/Build/Products/Release/
+          if-no-files-found: error
